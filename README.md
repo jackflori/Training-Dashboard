@@ -1,153 +1,110 @@
 # Training Dashboard
 
-A personal distance-running dashboard built around my own training: a sliding
-weekly plan calendar, GPX file upload that rolls into weekly totals,
-season-to-date totals, and a countdown to nationals.
+**[View it live →](https://training-dashboard-one-sigma.vercel.app/)**
+
+A personal distance-running dashboard I built for my own cross-country training:
+plan the week, drop in GPS files from a watch, and see the season's shape against
+the plan. Viewing is open to anyone; editing is mine.
 
 Platform-agnostic by design — it reads GPX exports from Strava, Garmin Connect,
 or anything else, with no API keys or OAuth to maintain.
 
-Two companion docs: [`CLAUDE.md`](./CLAUDE.md) is the working spec — the settled
-scope and constraints. [`DECISIONS.md`](./DECISIONS.md) is the decision log —
-what was considered, what was chosen, and why, including the calls that were
-later reversed.
+## What it does
 
-## Stack
+**Plan the week.** A Mon–Sun calendar with AM and PM slots per day, each with
+planned mileage, an off toggle, and an optional workout note. Both slots off
+marks a rest day. The calendar shows the plan only — what actually happened
+lives elsewhere, so the planning surface stays a planning surface.
+
+**Log runs by dropping files.** The whole page is a drop target for GPX files.
+Each one is parsed for distance, moving time, and elevation gain, then bucketed
+into the week it belongs to. Files aren't matched to individual days or
+sessions — they roll into a weekly total. A batch drop opens one review screen
+to flag workouts and enter their volume.
+
+**See the season.** A mileage chart across the whole season, with actual miles
+as columns and planned mileage as a target marker on the same axis. Clicking a
+week jumps the calendar there.
+
+**Catch a ramp too fast.** Week-over-week mileage is checked against the ~10%
+guideline that sports science associates with injury risk. A flagged jump can be
+dismissed with a reason — injury return, illness, intentional build — and the
+dismissal applies only to that week, so a later genuine spike still fires.
+
+**Close out the week.** A summary page opens Sunday afternoon with the week's
+mileage, moving time, average pace, elevation, and workout volume, alongside
+three 1–5 ratings for eating, sleep, and school stress. The ratings are stored
+raw and never combined into a score.
+
+## How it's built
 
 - **Next.js 14** (App Router) · React 18 · TypeScript (strict, `noUncheckedIndexedAccess`)
-- **Tailwind CSS** with semantic color tokens + dark mode
-- **fast-xml-parser** for GPX; distance/pace/elevation math is hand-rolled
+- **Tailwind CSS** with semantic color tokens and dark mode
+- **PostgreSQL** via Prisma, hosted on Neon; deployed on Vercel
+- **fast-xml-parser** for GPX; the distance, pace, and elevation math is hand-rolled
 - **Zod** for request validation
-- **Persistence:** a `Store` interface (`src/lib/store`) with two
-  implementations — Prisma + PostgreSQL when `DATABASE_URL` is set, a
-  file-backed JSON store otherwise
-- **Deployed on Vercel**, with Postgres hosted on Neon
-
-## Running locally
-
-```bash
-npm install
-npm run dev            # http://localhost:3000
-```
-
-No database and no credentials needed. With no `DATABASE_URL` set, persistence
-falls back to a JSON file under `data/`, and with no `AUTH_PASSWORD` set
-everything is editable without signing in. Copy `.env.example` to `.env.local`
-if you want to change the season defaults or point at a real database.
-
-To log a run, export a GPX from Strava (activity page → ⋯ → Export GPX) or
-Garmin Connect (activity → gear icon → Export to GPX) and drop it anywhere on
-the page.
-
-## Deploying
-
-The app is built for Vercel, and the file store deliberately cannot be used
-there — serverless filesystems are read-only, so production requires Postgres.
-
-1. Create a Postgres database (this uses [Neon](https://neon.tech)).
-2. Import the repo into Vercel and set four environment variables:
-
-   | Variable | Value |
-   | --- | --- |
-   | `DATABASE_URL` | Pooled connection string — used by the app |
-   | `DIRECT_URL` | Same host without `-pooler` — used for migrations |
-   | `AUTH_PASSWORD` | The password for editing; reads stay public |
-   | `AUTH_SECRET` | Random string used to sign the session cookie |
-
-3. Deploy. `postinstall` generates the Prisma client, and `npm run build` runs
-   `prisma migrate deploy` before compiling, so the schema is applied before the
-   code that depends on it goes live.
-
-Migrations are guarded on `DATABASE_URL`, so a local build with no database
-still works. A failed migration fails the build, which leaves the previous
-deployment serving rather than shipping against an unmigrated schema.
-
-If `AUTH_PASSWORD` is missing in production the app serves read-only rather than
-allowing anonymous writes — a misconfigured deploy fails toward locked, not open.
-
-## Scripts
-
-| Command | What it does |
-| --- | --- |
-| `npm run dev` | Dev server |
-| `npm run build` | Applies pending migrations (if a database is configured), then builds |
-| `npm run typecheck` | `tsc --noEmit` |
-| `npm run lint` | `next lint` |
-| `npm run prisma:migrate` | Create and apply a migration in development |
-| `npm run prisma:deploy` | Apply pending migrations without generating new ones |
-| `npm run prisma:generate` | Regenerate the Prisma client from the schema |
-
-## How it fits together
 
 ```
 src/
   app/
-    page.tsx                    Server component: loads dashboard + current week
-    week/[start]/summary/       Weekly summary page (gated, see below)
-    api/
-      uploads                   POST -> parse a batch of GPX files; GET -> list
-      uploads/[id]              PATCH -> flag workout + volume; DELETE -> discard
-      week?start=YYYY-MM-DD     GET  -> plan, uploads, aggregate, reflection
-      plan                      PUT  -> upsert one plan cell (off / miles / note)
-      summary                   PUT  -> save the week's 1-5 ratings
-      ramp-ack                  PUT/DELETE -> dismiss or restore a ramp warning
-      config                    GET/PUT -> season dates
-      dashboard                 GET  -> config, season totals, series, week list
-      auth/login , auth/logout  POST -> start or end an editing session
-  components/                   Client UI (Dashboard orchestrator + pieces)
+    page.tsx                    Server component: dashboard + current week
+    week/[start]/summary/       Weekly summary page
+    api/                        Route handlers (uploads, plan, summary,
+                                ramp-ack, config, dashboard, auth)
+  components/                   Client UI
   lib/
-    dates.ts                    Monday-start week math, summary unlock rule
     gpx/parse.ts                GPX -> distance / moving time / elevation gain
-    auth.ts                     Signed session cookie; requireEdit() route guard
+    domain/                     Pure logic: units, weekly + season totals, ramp
     store/                      Store interface; JsonStore + PrismaStore
-    domain/                     Pure logic: units/pace, weekly + season totals, ramp
-    dashboard.ts                Assembles the read-model the UI consumes
-    api.ts / client.ts          Error-handling wrappers for routes / browser fetch
-  scripts/prisma-migrate.mjs    Build-time migration, guarded on DATABASE_URL
+    dates.ts                    Monday-start week math, summary unlock rule
+    auth.ts                     Signed session cookie; requireEdit() guard
 ```
 
-Every mutating route calls `requireEdit()`; reads are unauthenticated. The
-persistence backend is chosen at runtime, and nothing above `lib/store` knows
-which one is live.
+Persistence sits behind a `Store` interface with two implementations, chosen at
+runtime by whether `DATABASE_URL` is set. Nothing above `lib/store` knows which
+is live — which is what made moving from a local JSON file to Postgres a
+one-file change with no edits to routes, components, or domain logic.
 
-### The two surfaces
+Domain logic is pure: `lib/domain` takes arrays and returns numbers, with no
+database, framework, or network involved. The calculations that are hardest to
+get right don't depend on anything.
 
-**Main page — the plan, plus the season's shape.** The Mon–Sun calendar shows what
-you *intend* to run: each day has AM and PM slots with an off toggle, a mileage
-field, and a `+` that reveals a workout note. Both slots off marks a rest day. No
-per-day uploaded data appears in the grid by design.
+Two companion docs: [`CLAUDE.md`](./CLAUDE.md) is the working spec — settled
+scope and constraints. [`DECISIONS.md`](./DECISIONS.md) is the decision log —
+what was considered, what was chosen, and why, including the calls that were
+later reversed.
 
-Below it, a **season mileage chart** (one column per week: actual as the column,
-planned as a target marker on the same axis — click a column to jump the calendar
-there) and a **week-over-week ramp flag** against the ~10% rule, with the last four
-logged weeks.
+## The parts that were actually hard
 
-**Weekly summary — the numbers.** Uploaded files roll into a weekly aggregate
-(mileage, moving time, average pace, elevation gain, workout volume and its share
-of the week) shown alongside three raw 1–5 ratings for eating, sleep, and school
-stress. It unlocks **Sunday at 1:00 pm Eastern** — past weeks are always open,
-future weeks never are. The gate is enforced server-side, not just in the UI.
+**Moving time, not elapsed.** Elapsed time is trivial and nearly useless — a
+water stop or a watch left running inflates it and drags average pace with it.
+Moving time only accrues on segments above 0.5 m/s (~32:00/mi, slower than any
+real running), and sample gaps over 30 seconds are skipped entirely, since those
+mean a paused watch or lost signal. Verified against a synthetic GPX with known
+ground truth: a 20-minute run at 3.0 m/s with a 3-minute standing stop parses to
+exactly 1200 s moving rather than the 1380 s elapsed.
 
-### Uploading
+**Elevation noise.** GPS and barometric altimeters jitter a metre or two while
+standing still, so naively summing positive changes over an hour of one-second
+samples invents hundreds of feet of climb. A hysteresis filter tracks the last
+confirmed altitude and only banks a change once it clears 1.5 m — in testing,
+180 s of ±0.5 m noise contributed 0.5 m instead of ~45 m.
 
-The whole page is a drop target; files aren't matched to days or sessions. Each
-file is parsed for distance, moving time, and elevation gain, then bucketed into
-the week containing its own start timestamp. A batch drop opens one review screen
-where you flag any workouts and enter their volume — a file that fails to parse
-is reported there rather than failing the batch.
+**A week with no runs means time off, not missing data.** The ramp metric
+originally skipped weeks with no files. That was wrong: for someone who logs
+consistently, an empty week almost always means injury or illness, and that's
+the part of a season you most need to see. Counting it as a real zero forced
+three cases to be handled honestly — a drop to zero reports −100% but never
+trips the guideline, which is about increases; coming back from zero has no
+percentage at all, so it says "back" rather than inventing one; and the week
+underway is shown but held out of the comparison until it finishes.
 
-## Status
-
-Core is built and verified end to end: GPX ingestion and review, plan calendar,
-weekly summary with ratings, season mileage chart, week-over-week ramp flag,
-season totals, countdown, settings. Persistence runs on Postgres in production
-behind a single-password edit gate; reads are public.
-
-The GPX math is checked against a synthetic file with known ground truth
-(distance, moving-time exclusion of stops, elevation noise filtering) and the
-summary unlock rule has boundary tests on both sides of the Nov 1 DST change.
-
-Remaining work is listed in [`DECISIONS.md`](./DECISIONS.md) → "Open / deferred".
+**Timezones, in both directions.** The calendar has none — every day is a plain
+`YYYY-MM-DD` string, because a Tuesday morning run is Tuesday regardless of UTC
+offset. The Sunday-afternoon summary unlock does need one, and it's anchored to
+`America/New_York` rather than a fixed offset, since daylight saving ends
+mid-season and a hardcoded UTC−5 would open it an hour early on one side of that
+date.
 
 ## Note on AI Usage
 
@@ -186,10 +143,6 @@ included. The commit history is co-authored, so the split is visible there too.
   in dark mode. Every dialog would have flashed a white wash instead of dimming
   the page. Only caught by rendering the page in both themes rather than reading
   the markup.
-- **Elevation noise.** Summing every positive altitude delta over a
-  1-second-sampled run accumulates hundreds of phantom feet from GPS jitter. A
-  synthetic file with a known 100 m climb and ±0.5 m noise made the size of the
-  error obvious; a hysteresis filter fixed it.
 
 ### What I'd do differently
 - **Check platform constraints before building against them.** The Strava
