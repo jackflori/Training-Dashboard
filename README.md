@@ -98,10 +98,65 @@ is reported there rather than failing the batch.
 ## Status
 
 Core is built and verified end to end: GPX ingestion and review, plan calendar,
-weekly summary with ratings, season totals, countdown, settings.
+weekly summary with ratings, season mileage chart, week-over-week ramp flag,
+season totals, countdown, settings. Persistence runs on Postgres in production
+behind a single-password edit gate; reads are public.
+
 The GPX math is checked against a synthetic file with known ground truth
 (distance, moving-time exclusion of stops, elevation noise filtering) and the
 summary unlock rule has boundary tests on both sides of the Nov 1 DST change.
 
-Remaining: Phase 2 Postgres swap and the production deploy — see `DECISIONS.md`
-→ "Open / deferred".
+Remaining work is listed in [`DECISIONS.md`](./DECISIONS.md) → "Open / deferred".
+
+## Note on AI Usage
+
+This project was built with heavy AI assistance — more than my
+[Game Boy emulator](https://github.com/jackflori/GameBoy-Emulator), where AI was
+used for explanations rather than code. Here, most of the implementation was
+AI-generated. My contribution was the scope, the design decisions, and the
+review: deciding what the app should do, judging what came back, and rejecting
+or reversing it when it was wrong.
+
+Some of the calls that shaped the result:
+
+- **Moving time over elapsed**, and the thresholds that make it robust
+- **Cutting the progress bar and the shoe tracker** — both would have added
+  manual upkeep or implied a correspondence in the data that doesn't exist
+- **Reversing the ramp metric to count an unlogged week as zero.** The original
+  implementation skipped those weeks, with a reasonable-sounding argument behind
+  it. It was wrong: a week off with an injury is the part of a season you most
+  need to see, and skipping it quietly erased it. The fix also surfaced a bug
+  that was hiding past weeks from the season chart entirely.
+
+[`DECISIONS.md`](./DECISIONS.md) is the honest record of that process, reversals
+included. The commit history is co-authored, so the split is visible there too.
+
+## Reflections
+
+### Hardest bugs
+- **Two week-ranges disagreeing.** The calendar nav was built from "current week
+  → season end" while the season chart used "season start → season end". Clicking
+  a past column in the chart jumped the calendar to a week the nav didn't know
+  existed, so `indexOf` returned -1 and both arrows disabled — a dead end you
+  could only escape via "jump to this week". Fixed by deriving both from one
+  range.
+- **A dark-mode theme token used as a scrim.** Modal overlays were painted with
+  the `ink` color at 50% opacity, which is near-black in light mode and *white*
+  in dark mode. Every dialog would have flashed a white wash instead of dimming
+  the page. Only caught by rendering the page in both themes rather than reading
+  the markup.
+- **Elevation noise.** Summing every positive altitude delta over a
+  1-second-sampled run accumulates hundreds of phantom feet from GPS jitter. A
+  synthetic file with a known 100 m climb and ±0.5 m noise made the size of the
+  error obvious; a hysteresis filter fixed it.
+
+### What I'd do differently
+- **Check platform constraints before building against them.** The Strava
+  integration was written before confirming that registering an app now requires
+  a paid subscription — a five-minute question that invalidated ~800 lines.
+- **Deploy earlier.** The file-backed store worked perfectly in local
+  development and could never have worked on Vercel, whose filesystem is
+  read-only. That's a whole class of bug that only appears at the platform
+  boundary.
+- **Keep test data away from real data.** Seeded fixtures and my own entries
+  shared one store file, and clearing fixtures wiped real input more than once.
