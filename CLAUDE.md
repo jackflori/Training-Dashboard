@@ -1,25 +1,24 @@
-# Strava Training Dashboard
+# Training Dashboard — spec
 
-Portfolio project. Design/architecture decisions happen in Claude web; implementation
-and debugging happen in Claude Code. This file is the persistent record between the two —
-update it whenever a planning chat locks in something new.
+The working specification for this project: the stack, the scope that's settled,
+and the constraints behind it. It's the reference I keep current as decisions
+land, and it's what I point tooling at so implementation stays aligned with what
+was actually agreed.
+
+Rationale for individual choices lives in [DECISIONS.md](./DECISIONS.md); this
+file records *what* was decided, that one records *why*.
 
 ## Stack
 - Next.js 14 App Router (React 18 + TypeScript strict), Tailwind CSS
-- PostgreSQL (Neon or Supabase) + Prisma ORM — **Phase 2, not wired up yet.**
-  Persistence currently runs through a file-backed JSON store behind a `Store`
-  interface (`src/lib/store`); `prisma/schema.prisma` already models the target
-  tables so the swap is one implementation, not a rewrite.
+- PostgreSQL (Neon) + Prisma ORM
+  - Persistence runs through a `Store` interface (`src/lib/store`) with two
+    implementations: Postgres when `DATABASE_URL` is set, a file-backed JSON
+    store otherwise. Local development needs no database.
 - Vercel (deploy target)
 
-> ⚠️ Note for planning chats: this file is the source of truth, and a Claude Code
-> session was once started with a stale copy of it — it had the pre-GPX Strava
-> API spec and built ~800 lines against the wrong data source before the
-> mismatch surfaced. Paste the current file into new chats.
-
 ## Data source: manual GPX upload (not Strava API)
-- **Decision log:** Strava's June 2026 developer program change requires an active
-  Strava subscription to register *any* app, including Single Player Mode
+- Strava's June 2026 developer program change requires an active Strava
+  subscription to register *any* app, including Single Player Mode
   (personal-use-only) apps — confirmed via Strava's own developer docs. No workaround
   exists at the API level. Rather than pay for a subscription, the project uses
   manual GPX file export/upload instead of live OAuth sync.
@@ -31,7 +30,7 @@ update it whenever a planning chat locks in something new.
 - **No OAuth, no token storage, no refresh logic, no rate limits to manage.**
 - HR is out of scope for v1 — not parsed or stored, even when present in the file.
 
-## Project scope (locked)
+## Project scope (settled)
 
 ### Main page — weekly plan (sliding calendar)
 - Mon–Sun, **season start through season end** — originally "current week through
@@ -124,12 +123,23 @@ update it whenever a planning chat locks in something new.
 - Plan-vs-actual adherence — partially built: the weekly summary shows % of planned
   mileage completed, and the season chart shows the two side by side. A dedicated
   adherence view is still open.
-- ACWR (acute:chronic workload ratio) training-load metric — real sports-science metric,
-  good interview material, but easy to get subtly wrong; build after the core dashboard works
+- ACWR (acute:chronic workload ratio) training-load metric — a real sports-science
+  measure, but easy to get subtly wrong and misleading when it is. Only worth
+  building carefully, after the core dashboard has a season of data behind it.
 
-## Workflow notes
-- Keep a running decision log (what was considered, what was chosen, why) — this
-  doubles as interview material later. The Strava-API-vs-GPX-upload decision above is
-  a good example of what belongs here.
-- Prefer TypeScript strictness as a guardrail against AI-introduced bugs; let type
-  errors surface mistakes before runtime does.
+## Working conventions
+- **Keep the decision log current.** Every non-obvious choice gets an entry in
+  [DECISIONS.md](./DECISIONS.md) with what was considered, what was chosen, and
+  why — including reversals, which are usually the more useful entries. The
+  Strava-API-vs-GPX decision above is the model.
+- **TypeScript strict, with `noUncheckedIndexedAccess`.** Type errors are cheaper
+  than runtime ones; the compiler is the first reviewer.
+- **Domain logic stays pure.** Unit conversion, weekly totals, ramp calculations
+  and date math live in `src/lib/domain` and `src/lib/dates` as functions over
+  plain data, with no I/O. They're the parts most worth getting right, and
+  keeping them free of the store and the framework makes them directly testable.
+- **Persistence goes through the `Store` interface**, never a database client
+  directly. Routes, domain code and components should not know which backend is
+  live.
+- **Enforce rules on the server, not just in the UI.** Hiding a control is a
+  suggestion; the route handler is the boundary that counts.

@@ -7,8 +7,10 @@ season-to-date totals, and a countdown to nationals.
 Platform-agnostic by design — it reads GPX exports from Strava, Garmin Connect,
 or anything else, with no API keys or OAuth to maintain.
 
-Portfolio project. Design decisions live in [`DECISIONS.md`](./DECISIONS.md);
-scope and standing constraints in [`CLAUDE.md`](./CLAUDE.md).
+Two companion docs: [`CLAUDE.md`](./CLAUDE.md) is the working spec — the settled
+scope and constraints. [`DECISIONS.md`](./DECISIONS.md) is the decision log —
+what was considered, what was chosen, and why, including the calls that were
+later reversed.
 
 ## Stack
 

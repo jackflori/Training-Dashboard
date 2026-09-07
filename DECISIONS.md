@@ -1,7 +1,9 @@
 # Decision log
 
-Running record of design/implementation choices — what was considered, what was
-picked, why. Doubles as interview talking points.
+A running record of the design choices behind this project: what was considered,
+what was chosen, and why. Entries are written at the time the decision is made,
+including the ones that were later reversed — the reversals are usually the more
+useful half.
 
 ---
 
@@ -22,22 +24,29 @@ Beyond the cost, GPX turned out to be the better call on its own merits:
 - **Platform-agnostic.** Any GPX export works — Strava, Garmin Connect, COROS.
   The app isn't hostage to one vendor's API terms.
 - **No moving parts to break.** No tokens to refresh, no revocation handling, no
-  rate limits, no OAuth callback domains to keep in sync between dev and prod. A
-  portfolio link that must work when someone clicks it mid-interview shouldn't
-  depend on a live third-party grant.
-- **More actual engineering to talk about.** "Wired up a third-party OAuth flow"
-  is table stakes — every portfolio project has one, and the code is mostly
-  following the provider's docs. Parsing an XML track, deriving distance from
-  lat/lon with haversine, separating moving time from elapsed, and filtering
-  barometric noise out of elevation gain is real work with real edge cases.
+  rate limits, no OAuth callback domains to keep in sync between dev and prod.
+  A hosted demo shouldn't stop working because a third-party grant lapsed.
+- **The harder, more interesting problem.** An OAuth integration is mostly
+  following a provider's documentation correctly. Parsing an XML track,
+  deriving distance from lat/lon with haversine, separating moving time from
+  elapsed, and filtering barometric noise out of elevation gain are real
+  problems with real edge cases — and they're the ones this app is actually
+  about.
 
-**Cost:** this was decided *after* a first implementation pass had already built
-the full Strava OAuth layer (~800 lines: authorize/callback routes, proactive
-token refresh, deauth handling, typed API client). All of it was deleted. The
-cause was a stale copy of `CLAUDE.md` in the implementation session that still
-described the API approach. Cheap lesson, recorded here and flagged at the top of
-`CLAUDE.md`: the spec file is the source of truth and needs to be re-pasted into
-new planning chats.
+**Cost:** the API integration was already built when this landed — roughly 800
+lines of authorize/callback routes, proactive token refresh, revocation
+handling, and a typed client. All of it was deleted rather than kept "in case."
+
+Two things made that cheap enough to be worth doing. The OAuth layer was
+isolated behind its own module, so removing it touched the routes that called it
+and nothing else. And the sunk cost was genuinely irrelevant — the code could not
+run without a subscription, so keeping it would have meant carrying dead weight
+to avoid admitting the weight was dead.
+
+The transferable lesson is about sequencing, not Strava: the platform constraint
+(*can I even register an app?*) was answerable in five minutes and was checked
+after the integration was written rather than before. Cheap questions that can
+invalidate expensive work belong first.
 
 ## 2. Moving time, not elapsed time
 
@@ -75,7 +84,7 @@ gain instead of ~45 m.
 **Chose:** a dropped file lands in the week containing its GPX start time; files
 with no timestamps fall back to the week currently being viewed.
 
-**Why:** The locked scope says files aren't matched to a day or session — but
+**Why:** By design, files aren't matched to a day or session — but
 they still have to land in *some* week to roll up. Reading it from the file is
 both more accurate and less surprising than "whatever week you happened to be
 looking at," and it means dropping a backlog of files at the end of a week
@@ -136,13 +145,13 @@ Two implementation notes worth keeping:
 **Chose:** eating / sleep / school stress are stored as three 1–5 integers and
 displayed as-is next to the week's stats. Nothing is computed from them.
 
-**Why:** Carried over from the locked scope, and worth restating because it's the
+**Why:** Settled early, and worth restating because it's the
 kind of thing that invites a bad feature. There's no defensible way to turn a
 subjective 1–5 into a training-load multiplier — any formula would be invented
 precision. The value is in eyeballing your own correlations across a season, not
 in a fake composite score.
 
-## 8. Persistence: file-backed JSON store now, Prisma/Postgres later
+## 8. Persistence behind an interface, file store first
 
 **Considered:** (a) stand up Neon + Prisma immediately; (b) `localStorage`; (c) a
 file-backed store behind an interface.
@@ -151,19 +160,25 @@ file-backed store behind an interface.
 `data/store.json` with atomic temp-file renames and an in-process write queue to
 serialise concurrent mutations.
 
-**Why:** CLAUDE.md says don't build against the real DB yet. An interface with
-one swappable implementation makes Phase 2 a single-file change
-(`src/lib/store/index.ts`) — nothing in the routes, domain logic, or UI knows
-which backend is live. `prisma/schema.prisma` is already written so the target
-shapes are locked and reviewable. `localStorage` was out because totals need to
-be computed server-side.
+**Why:** the app needed to be usable before the data model was settled, and
+standing up Postgres first would have meant designing a schema around features
+that didn't exist yet. An interface with one swappable implementation deferred
+that without painting anything into a corner: nothing in the routes, domain
+logic, or UI knows which backend is live. `prisma/schema.prisma` was written up
+front anyway, so the target shapes stayed reviewable while the file store ran.
+`localStorage` was out because totals are computed server-side.
+
+**How it played out:** the swap to Postgres later cost one new file
+(`prisma-store.ts`) plus one line in `src/lib/store/index.ts`, which now picks
+the backend on whether `DATABASE_URL` is set. No route, component, or domain
+function changed. See #14.
 
 ## 9. Main calendar is plan-only
 
 **Chose:** the calendar renders the plan and nothing else. Uploaded data appears
 only on the weekly summary page.
 
-**Why:** Straight from the locked scope, and it holds up: the calendar is a
+**Why:** Straight from the original scope, and it held up: the calendar is a
 *planning* surface, and mixing in actuals would turn it into a Strava clone. The
 one concession is a planned-mileage line under the grid, which is still plan-side
 data.
@@ -225,8 +240,8 @@ forward, and the season chart was using it — so weeks already behind us were
 absent from both the chart and the ramp entirely. Time off would have vanished
 rather than showing as zero. Added `weeksBetween(start, end)` for the chart and
 ramp (full season, past included) and left `seasonWeeks` to the calendar nav,
-where "current week → season end" is the locked scope. It went unnoticed because
-the seeded test data happened to start in the same week as "today".
+where "current week → season end" was the original scope. It went unnoticed
+because the seeded test data happened to start in the same week as "today".
 
 ## 9d. Ramp alerts are dismissable, per week
 
@@ -267,7 +282,7 @@ week you then couldn't navigate out of except via "jump to this week". Setting
 the season start in the past made it worse: the chart showed those weeks and the
 calendar refused to open them.
 
-The "current week → season end" clamp came from the original locked scope, which
+The "current week → season end" clamp came from the original scope, which
 predates both the season chart and an editable season start. Once you can point
 the season at the past, refusing to navigate there is just a bug wearing a spec
 as a hat.
@@ -317,13 +332,64 @@ place to retune the palette.
 the pure-GET ones at build time, which both bakes in stale data and crashed the
 build. Explicit beats relying on Next's heuristic.
 
+## 14. Postgres, chosen by environment rather than by build
+
+**Chose:** `PrismaStore` implements the same `Store` interface as `JsonStore`,
+and `src/lib/store/index.ts` picks between them on whether `DATABASE_URL` is
+set — Postgres in production, the file store locally.
+
+**Why the swap happened at all:** the file store worked fine locally and would
+have kept working indefinitely. Deploying is what forced it. Serverless
+functions run on a read-only filesystem apart from `/tmp`, and the store writes
+into the deployment bundle — so every write would have failed in production
+while local development looked perfect. This is the class of bug that only
+appears at the platform boundary, which is a decent argument for deploying
+earlier rather than later.
+
+**Why a runtime switch instead of replacing the file store:** local development
+needs no database, no connection string, and no network. Keeping both and
+choosing at runtime preserves that, and it also means the file store stays
+exercised rather than rotting as dead code.
+
+Two details worth keeping:
+
+- **Migrations run in the build** (`scripts/prisma-migrate.mjs`), guarded on
+  `DATABASE_URL` so a local build with no database still succeeds. Prisma's
+  `postinstall` only generates the *client* — without a separate migrate step, a
+  deploy carrying a schema change builds green and then fails at runtime against
+  columns that don't exist. A failed migration fails the build, which leaves the
+  previous deployment serving.
+- **Pooled connection for the app, direct for migrations.** Serverless opens many
+  short-lived connections, which is what the pooler is for; migrations need a
+  real session, hence `directUrl`.
+
+## 15. A single shared password, not a user system
+
+**Chose:** reads are public; writes require a session cookie obtained by posting
+one shared password. HMAC-signed, `httpOnly`, 30-day expiry.
+
+**Why:** there is exactly one athlete. Accounts, registration, password reset,
+and email verification would all be ceremony around a table with one row. But
+"no auth at all" stopped being viable at deploy: anyone with the URL could edit
+the training plan, upload files, or change the season config. The gate exists to
+stop that, not to model identity.
+
+Reads stay open deliberately — the dashboard is meant to be shareable, and a
+visitor should see the season without being asked for anything.
+
+**Fails safe.** With no password configured, the app is permissive in
+development (so local work needs no setup) but denies writes in production. A
+deploy that forgets the environment variable ends up read-only rather than
+world-writable — the failure mode points at "too locked" instead of "wide open."
+
 ## Open / deferred
 
 - **Nationals + season dates** are seeded from env and editable in Settings, but
   the real dates still need to be entered.
-- **Phase 2:** Prisma implementation of `Store`; migrate `data/store.json` into
-  Postgres.
-- **Auth:** none. Single-user app. Revisit if it ever gets a second athlete.
-- **Stretch goals** from CLAUDE.md (plan-vs-actual adherence beyond the basic
-  percentage already on the summary page, week-over-week ramp-rate flag, ACWR)
-  are unbuilt by design — core first.
+- **Preview deployments share the production database.** Fine for solo work, but
+  a schema change pushed to a branch would migrate real data. Neon's database
+  branching is the fix if that ever matters.
+- **Stretch goals** from the original scope — plan-vs-actual adherence beyond the
+  percentage already on the summary page, and ACWR (acute:chronic workload ratio)
+  — remain unbuilt by design. ACWR in particular is easy to get subtly wrong and
+  wasn't worth shipping half-right.
