@@ -14,7 +14,20 @@ file records *what* was decided, that one records *why*.
   - Persistence runs through a `Store` interface (`src/lib/store`) with two
     implementations: Postgres when `DATABASE_URL` is set, a file-backed JSON
     store otherwise. Local development needs no database.
-- Vercel (deploy target)
+- Vercel (deployed), Neon (hosted Postgres)
+
+## Access model
+- **Reads are public; writes require a session.** The dashboard is meant to be
+  shareable — a visitor sees the whole season without signing in — but only the
+  athlete can change anything.
+- One shared password (`AUTH_PASSWORD`), exchanged at `/api/auth/login` for an
+  HMAC-signed `httpOnly` cookie. No accounts: there is one athlete, so
+  registration and password reset would be ceremony around a single row.
+- Enforced server-side. Every mutating route calls `requireEdit()`; hiding a
+  control in the UI is a suggestion, not a boundary.
+- **Fails safe.** With no password configured the app is permissive in
+  development and read-only in production, so a misconfigured deploy locks down
+  rather than opening up.
 
 ## Data source: manual GPX upload (not Strava API)
 - Strava's June 2026 developer program change requires an active Strava

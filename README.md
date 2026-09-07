@@ -18,31 +18,64 @@ later reversed.
 - **Tailwind CSS** with semantic color tokens + dark mode
 - **fast-xml-parser** for GPX; distance/pace/elevation math is hand-rolled
 - **Zod** for request validation
-- **Persistence:** file-backed JSON store today (`src/lib/store`), Prisma +
-  Postgres in Phase 2 (`prisma/schema.prisma` already models it)
-- **Deploy target:** Vercel
+- **Persistence:** a `Store` interface (`src/lib/store`) with two
+  implementations — Prisma + PostgreSQL when `DATABASE_URL` is set, a
+  file-backed JSON store otherwise
+- **Deployed on Vercel**, with Postgres hosted on Neon
 
-## Getting started
+## Running locally
 
 ```bash
 npm install
-cp .env.example .env   # optional — every value has a default
 npm run dev            # http://localhost:3000
 ```
 
-No credentials required. To log a run, export a GPX from Strava (activity page →
-⋯ → Export GPX) or Garmin Connect (activity → gear icon → Export to GPX) and drop
-it anywhere on the page.
+No database and no credentials needed. With no `DATABASE_URL` set, persistence
+falls back to a JSON file under `data/`, and with no `AUTH_PASSWORD` set
+everything is editable without signing in. Copy `.env.example` to `.env.local`
+if you want to change the season defaults or point at a real database.
+
+To log a run, export a GPX from Strava (activity page → ⋯ → Export GPX) or
+Garmin Connect (activity → gear icon → Export to GPX) and drop it anywhere on
+the page.
+
+## Deploying
+
+The app is built for Vercel, and the file store deliberately cannot be used
+there — serverless filesystems are read-only, so production requires Postgres.
+
+1. Create a Postgres database (this uses [Neon](https://neon.tech)).
+2. Import the repo into Vercel and set four environment variables:
+
+   | Variable | Value |
+   | --- | --- |
+   | `DATABASE_URL` | Pooled connection string — used by the app |
+   | `DIRECT_URL` | Same host without `-pooler` — used for migrations |
+   | `AUTH_PASSWORD` | The password for editing; reads stay public |
+   | `AUTH_SECRET` | Random string used to sign the session cookie |
+
+3. Deploy. `postinstall` generates the Prisma client, and `npm run build` runs
+   `prisma migrate deploy` before compiling, so the schema is applied before the
+   code that depends on it goes live.
+
+Migrations are guarded on `DATABASE_URL`, so a local build with no database
+still works. A failed migration fails the build, which leaves the previous
+deployment serving rather than shipping against an unmigrated schema.
+
+If `AUTH_PASSWORD` is missing in production the app serves read-only rather than
+allowing anonymous writes — a misconfigured deploy fails toward locked, not open.
 
 ## Scripts
 
 | Command | What it does |
 | --- | --- |
 | `npm run dev` | Dev server |
-| `npm run build` | Production build (also runs lint + typecheck) |
+| `npm run build` | Applies pending migrations (if a database is configured), then builds |
 | `npm run typecheck` | `tsc --noEmit` |
 | `npm run lint` | `next lint` |
-| `npm run prisma:generate` / `prisma:migrate` | Phase 2, unused for now |
+| `npm run prisma:migrate` | Create and apply a migration in development |
+| `npm run prisma:deploy` | Apply pending migrations without generating new ones |
+| `npm run prisma:generate` | Regenerate the Prisma client from the schema |
 
 ## How it fits together
 
@@ -57,17 +90,25 @@ src/
       week?start=YYYY-MM-DD     GET  -> plan, uploads, aggregate, reflection
       plan                      PUT  -> upsert one plan cell (off / miles / note)
       summary                   PUT  -> save the week's 1-5 ratings
+      ramp-ack                  PUT/DELETE -> dismiss or restore a ramp warning
       config                    GET/PUT -> season dates
-      dashboard                 GET  -> config, season totals, week list
+      dashboard                 GET  -> config, season totals, series, week list
+      auth/login , auth/logout  POST -> start or end an editing session
   components/                   Client UI (Dashboard orchestrator + pieces)
   lib/
     dates.ts                    Monday-start week math, summary unlock rule
     gpx/parse.ts                GPX -> distance / moving time / elevation gain
-    store/                      Store interface + JsonStore (swap point for Prisma)
-    domain/                     Pure logic: units/pace, weekly + season totals
+    auth.ts                     Signed session cookie; requireEdit() route guard
+    store/                      Store interface; JsonStore + PrismaStore
+    domain/                     Pure logic: units/pace, weekly + season totals, ramp
     dashboard.ts                Assembles the read-model the UI consumes
     api.ts / client.ts          Error-handling wrappers for routes / browser fetch
+  scripts/prisma-migrate.mjs    Build-time migration, guarded on DATABASE_URL
 ```
+
+Every mutating route calls `requireEdit()`; reads are unauthenticated. The
+persistence backend is chosen at runtime, and nothing above `lib/store` knows
+which one is live.
 
 ### The two surfaces
 
