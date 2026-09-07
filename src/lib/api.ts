@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { ZodError } from "zod";
 
+import { UnauthorizedError } from "@/lib/auth";
 import { GpxParseError } from "@/lib/gpx/parse";
 import { StoreError } from "@/lib/store";
 
@@ -22,6 +23,13 @@ export function handle<Args extends unknown[]>(
 }
 
 export function toErrorResponse(err: unknown): NextResponse {
+  if (err instanceof UnauthorizedError) {
+    return NextResponse.json(
+      { error: { code: err.code, message: err.message } },
+      { status: 401 },
+    );
+  }
+
   if (err instanceof ZodError) {
     return NextResponse.json(
       {

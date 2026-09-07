@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { handle, json } from "@/lib/api";
+import { requireEdit } from "@/lib/auth";
 import { isSummaryUnlocked, mondayOf } from "@/lib/dates";
 import { store } from "@/lib/store";
 
@@ -23,6 +24,7 @@ const bodySchema = z.object({
  * bypassed by hitting the endpoint directly.
  */
 export const PUT = handle(async (request: Request) => {
+  requireEdit();
   const parsed = bodySchema.parse(await request.json());
   const isoWeekStart = mondayOf(parsed.isoWeekStart);
 

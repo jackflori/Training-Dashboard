@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import { ApiError, api } from "@/lib/client";
+import { useCanEdit } from "./AuthGate";
 import type { IsoDate } from "@/lib/dates";
 import type { PlanEntry, PlanSlot } from "@/lib/store";
 import { Spinner } from "./ui";
@@ -25,6 +26,7 @@ export function PlanCell({
   entry: PlanEntry | undefined;
   onSaved: (entry: PlanEntry) => void;
 }) {
+  const canEdit = useCanEdit();
   const [off, setOff] = useState(entry?.off ?? false);
   const [miles, setMiles] = useState(entry?.miles?.toString() ?? "");
   const [note, setNote] = useState(entry?.note ?? "");
@@ -101,6 +103,7 @@ export function PlanCell({
             onChange={(e) => setMiles(e.target.value)}
             onBlur={() => save({})}
             onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
+            disabled={!canEdit}
             placeholder="—"
             aria-label={`${slot} planned miles`}
             className="w-full min-w-0 flex-1 rounded border border-transparent bg-transparent px-1 py-0.5 text-sm font-medium tabular-nums text-ink placeholder:text-ink-muted/50 hover:border-border focus:border-accent focus:bg-surface focus:outline-none focus:ring-1 focus:ring-accent/30"
@@ -109,6 +112,7 @@ export function PlanCell({
 
         {saving && <Spinner className="h-3 w-3 text-ink-muted" />}
 
+        {canEdit && (
         <button
           type="button"
           onClick={toggleOff}
@@ -122,8 +126,9 @@ export function PlanCell({
         >
           off
         </button>
+        )}
 
-        {!off && (
+        {canEdit && !off && (
           <button
             type="button"
             onClick={() => {
@@ -147,6 +152,7 @@ export function PlanCell({
           onChange={(e) => setNote(e.target.value)}
           onBlur={() => save({})}
           onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
+          disabled={!canEdit}
           placeholder="workout note"
           aria-label={`${slot} workout note`}
           className="mt-1 w-full rounded border border-border bg-surface px-1.5 py-1 text-xs text-ink placeholder:text-ink-muted/50 focus:border-accent focus:outline-none"

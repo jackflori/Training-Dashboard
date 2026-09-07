@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { AuthProvider } from "@/components/AuthGate";
 import { WeeklySummary } from "@/components/WeeklySummary";
+import { canEdit } from "@/lib/auth";
 import { getWeekView } from "@/lib/dashboard";
 import { isSummaryUnlocked, mondayOf } from "@/lib/dates";
 
@@ -41,5 +43,9 @@ export default async function WeeklySummaryPage({
     );
   }
 
-  return <WeeklySummary week={week} />;
+  return (
+    <AuthProvider canEdit={canEdit()}>
+      <WeeklySummary week={week} />
+    </AuthProvider>
+  );
 }

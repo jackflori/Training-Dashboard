@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { handle, json } from "@/lib/api";
+import { requireEdit } from "@/lib/auth";
 import { mondayOf } from "@/lib/dates";
 import { store } from "@/lib/store";
 
@@ -20,6 +21,7 @@ const bodySchema = z.object({
  * and a slot with nothing set at all is removed rather than stored blank.
  */
 export const PUT = handle(async (request: Request) => {
+  requireEdit();
   const parsed = bodySchema.parse(await request.json());
   const entry = await store.upsertPlanEntry({
     ...parsed,

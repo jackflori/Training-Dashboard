@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { handle, json } from "@/lib/api";
+import { requireEdit } from "@/lib/auth";
 import { store } from "@/lib/store";
 
 export const dynamic = "force-dynamic";
@@ -20,6 +21,7 @@ type Ctx = { params: Promise<{ id: string }> };
 
 /** PATCH /api/uploads/:id — used by the review screen to flag workouts. */
 export const PATCH = handle(async (request: Request, ctx: Ctx) => {
+  requireEdit();
   const { id } = await ctx.params;
   const patch = patchSchema.parse(await request.json());
   return json(await store.updateUpload(id, patch));
@@ -27,6 +29,7 @@ export const PATCH = handle(async (request: Request, ctx: Ctx) => {
 
 /** DELETE /api/uploads/:id — drop a file uploaded by mistake. */
 export const DELETE = handle(async (_request: Request, ctx: Ctx) => {
+  requireEdit();
   const { id } = await ctx.params;
   await store.deleteUpload(id);
   return json({ ok: true });

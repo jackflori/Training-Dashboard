@@ -8,6 +8,7 @@ import { formatWeekRange } from "@/lib/dates";
 import { metersToMiles } from "@/lib/domain/activity";
 import { duration, feet } from "@/lib/format";
 import type { WeeklyReflection } from "@/lib/store";
+import { useCanEdit } from "./AuthGate";
 import { RatingsDialog } from "./RatingsDialog";
 import {
   BoltIcon,
@@ -29,11 +30,13 @@ const RATING_FIELDS = [
  * the main calendar stays plan-only.
  */
 export function WeeklySummary({ week }: { week: WeekView }) {
+  const canEdit = useCanEdit();
   const [reflection, setReflection] = useState<WeeklyReflection | null>(
     week.reflection,
   );
-  // Ask for ratings on arrival if they haven't been given for this week yet.
-  const [asking, setAsking] = useState(week.reflection === null);
+  // Ask for ratings on arrival if they haven't been given for this week yet —
+  // but never prompt a read-only visitor for something they can't save.
+  const [asking, setAsking] = useState(canEdit && week.reflection === null);
 
   const { aggregate } = week;
   const adherence =
@@ -135,13 +138,15 @@ export function WeeklySummary({ week }: { week: WeekView }) {
         <Card
           title="How the week felt"
           action={
-            <button
-              type="button"
-              onClick={() => setAsking(true)}
-              className="text-xs font-medium text-accent hover:underline"
-            >
-              {reflection ? "Edit" : "Add"}
-            </button>
+            canEdit ? (
+              <button
+                type="button"
+                onClick={() => setAsking(true)}
+                className="text-xs font-medium text-accent hover:underline"
+              >
+                {reflection ? "Edit" : "Add"}
+              </button>
+            ) : null
           }
         >
           {reflection ? (

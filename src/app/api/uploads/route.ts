@@ -1,4 +1,5 @@
 import { handle, json } from "@/lib/api";
+import { requireEdit } from "@/lib/auth";
 import { currentWeekStart, mondayOf, toIsoDate } from "@/lib/dates";
 import { GpxParseError, parseGpx } from "@/lib/gpx/parse";
 import { store, type UploadedActivityInput } from "@/lib/store";
@@ -30,6 +31,7 @@ export interface UploadResponse {
  * review screen can show what didn't make it.
  */
 export const POST = handle(async (request: Request) => {
+  requireEdit();
   const form = await request.formData();
   const fallbackWeek = mondayOf(
     (form.get("fallbackWeek") as string | null) ?? currentWeekStart(),

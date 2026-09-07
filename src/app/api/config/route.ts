@@ -3,6 +3,7 @@ import { z } from "zod";
 export const dynamic = "force-dynamic";
 
 import { handle, json } from "@/lib/api";
+import { requireEdit } from "@/lib/auth";
 import { store } from "@/lib/store";
 
 const iso = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
@@ -20,6 +21,7 @@ export const GET = handle(async () => json(await store.getConfig()));
 
 /** PUT /api/config — partial update of season settings. */
 export const PUT = handle(async (request: Request) => {
+  requireEdit();
   const patch = patchSchema.parse(await request.json());
   return json(await store.setConfig(patch));
 });

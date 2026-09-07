@@ -8,6 +8,7 @@ import { ApiError, api } from "@/lib/client";
 import type { DashboardData, WeekView } from "@/lib/dashboard";
 import { isSummaryUnlocked, type IsoDate } from "@/lib/dates";
 import type { PlanEntry, UploadedActivity } from "@/lib/store";
+import { AuthProvider, SignInButton } from "./AuthGate";
 import { DropZone } from "./DropZone";
 import { RampFlag } from "./RampFlag";
 import { ReviewScreen } from "./ReviewScreen";
@@ -26,9 +27,11 @@ interface Batch {
 export function Dashboard({
   initial,
   initialWeek,
+  canEdit,
 }: {
   initial: DashboardData;
   initialWeek: WeekView;
+  canEdit: boolean;
 }) {
   const [data, setData] = useState(initial);
   const [week, setWeek] = useState(initialWeek);
@@ -130,8 +133,11 @@ export function Dashboard({
   const summaryOpen = isSummaryUnlocked(weekStart);
 
   return (
-    <>
-      <DropZone onFiles={handleFiles} disabled={uploading || batch !== null} />
+    <AuthProvider canEdit={canEdit}>
+      <DropZone
+        onFiles={handleFiles}
+        disabled={!canEdit || uploading || batch !== null}
+      />
 
       {batch && (
         <ReviewScreen
@@ -156,7 +162,9 @@ export function Dashboard({
                 Training Dashboard
               </h1>
               <p className="text-sm text-ink-muted">
-                Drop GPX files anywhere on this page to log them.
+                {canEdit
+                  ? "Drop GPX files anywhere on this page to log them."
+                  : "Viewing in read-only mode."}
               </p>
             </div>
           </div>
@@ -166,10 +174,13 @@ export function Dashboard({
                 <Spinner /> Parsing files…
               </span>
             )}
-            <SettingsPanel
-              config={data.config}
-              onSaved={() => void refreshAll()}
-            />
+            <SignInButton canEdit={canEdit} />
+            {canEdit && (
+              <SettingsPanel
+                config={data.config}
+                onSaved={() => void refreshAll()}
+              />
+            )}
           </div>
         </header>
 
@@ -238,6 +249,6 @@ export function Dashboard({
           />
         </div>
       </main>
-    </>
+    </AuthProvider>
   );
 }

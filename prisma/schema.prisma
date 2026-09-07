@@ -12,7 +12,10 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
+  // Pooled connection for the app (serverless functions open many short-lived
+  // connections); direct connection for migrations, which need a real session.
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 /// One uploaded GPX file reduced to its aggregate numbers.

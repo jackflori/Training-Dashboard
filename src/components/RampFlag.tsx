@@ -5,6 +5,7 @@ import { useState } from "react";
 import { ApiError, api } from "@/lib/client";
 import { formatWeekRange } from "@/lib/dates";
 import { RAMP_LIMIT_PCT, type RampRate, type RampRow } from "@/lib/domain/totals";
+import { useCanEdit } from "./AuthGate";
 import { Card, Spinner } from "./ui";
 
 /** Common reasons a jump is expected. One click each — no typing required. */
@@ -31,6 +32,7 @@ export function RampFlag({
   rows: RampRow[];
   onChange: () => void | Promise<void>;
 }) {
+  const canEdit = useCanEdit();
   const [picking, setPicking] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -124,7 +126,7 @@ export function RampFlag({
             Above the {RAMP_LIMIT_PCT}% guideline
           </div>
 
-          {picking ? (
+          {!canEdit ? null : picking ? (
             <div className="mt-2">
               <p className="text-xs text-ink-muted">Why was this expected?</p>
               <div className="mt-1.5 flex flex-wrap gap-1.5">
@@ -177,6 +179,7 @@ export function RampFlag({
             <MutedIcon />
             Dismissed{ramp.reason ? ` · ${ramp.reason}` : ""}
           </div>
+          {canEdit && (
           <button
             type="button"
             onClick={restore}
@@ -186,6 +189,7 @@ export function RampFlag({
             {busy && <Spinner className="h-3 w-3" />}
             Restore alert
           </button>
+          )}
         </div>
       )}
 

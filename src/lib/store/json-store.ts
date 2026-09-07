@@ -3,6 +3,8 @@ import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 
 import type { IsoDate } from "@/lib/dates";
+import { defaultConfig } from "./defaults";
+import { StoreError } from "./errors";
 import type {
   PlanEntry,
   PlanEntryInput,
@@ -26,37 +28,6 @@ interface Snapshot {
 
 function emptySnapshot(): Snapshot {
   return { uploads: [], plan: [], reflections: [], rampAcks: [], config: null };
-}
-
-const ISO_RE = /^\d{4}-\d{2}-\d{2}$/;
-
-/** Read an ISO date from env, falling back if unset/malformed. */
-function envDate(key: string, fallback: IsoDate): IsoDate {
-  const v = process.env[key];
-  return v && ISO_RE.test(v) ? v : fallback;
-}
-
-/**
- * Seeded the first time config is read. These are only defaults — the values
- * are editable in the UI (Settings) and persisted into the store thereafter.
- */
-function defaultConfig(): SeasonConfig {
-  const nationalsDate = envDate("NATIONALS_DATE", "2026-11-21");
-  return {
-    nationalsDate,
-    seasonStartDate: envDate("SEASON_START_DATE", "2026-09-01"),
-    seasonEndDate: envDate("SEASON_END_DATE", nationalsDate),
-  };
-}
-
-export class StoreError extends Error {
-  constructor(
-    message: string,
-    readonly status = 500,
-  ) {
-    super(message);
-    this.name = "StoreError";
-  }
 }
 
 /**
