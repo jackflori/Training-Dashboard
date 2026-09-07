@@ -1,0 +1,92 @@
+// Phase 2 target schema. NOT wired up yet — the app currently persists through
+// src/lib/store (a file-backed JSON store). When Postgres lands:
+//   1. set DATABASE_URL
+//   2. `npm run prisma:migrate`
+//   3. add a Prisma-backed implementation of the Store interface and swap the
+//      one line in src/lib/store/index.ts
+// The shapes below intentionally mirror src/lib/store/types.ts.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+/// One uploaded GPX file reduced to its aggregate numbers.
+/// Deliberately not linked to a day or an AM/PM session — files roll up into a
+/// weekly total and nothing tries to match them to planned sessions.
+model UploadedActivity {
+  id                  String   @id @default(cuid())
+  fileName            String
+  /// Track name from inside the GPX, when present.
+  trackName           String?
+  /// ISO date (YYYY-MM-DD) of the Monday this file counts toward.
+  isoWeekStart        String
+  /// Start of the track, or null when the file carried no timestamps.
+  startTime           DateTime?
+  /// Metres.
+  distanceMeters      Float
+  /// Seconds, stopped segments excluded. See src/lib/gpx/parse.ts.
+  movingSeconds       Int
+  /// Metres, noise-filtered.
+  elevationGainMeters Float
+  /// Flagged on the post-drop review screen.
+  isWorkout           Boolean  @default(false)
+  /// Miles of quality volume inside the session, entered when isWorkout.
+  workoutMiles        Float?
+  uploadedAt          DateTime @default(now())
+
+  @@index([isoWeekStart])
+}
+
+/// One planned session. (isoWeekStart, day, slot) is unique.
+/// The plan side carries mileage and a note only — workout volume is captured
+/// on the upload side, not planned in advance.
+model PlanEntry {
+  id           String   @id @default(cuid())
+  /// ISO date (YYYY-MM-DD) of the Monday that starts the week.
+  isoWeekStart String
+  /// 0 = Monday ... 6 = Sunday
+  day          Int
+  /// "AM" | "PM"
+  slot         String
+  /// Explicitly no session. Both slots off = full rest day.
+  off          Boolean  @default(false)
+  /// Planned mileage. Null when off or unset.
+  miles        Float?
+  note         String?
+  updatedAt    DateTime @updatedAt
+
+  @@unique([isoWeekStart, day, slot])
+}
+
+/// Subjective end-of-week ratings, 1-5. Stored raw and displayed as-is — no
+/// score is derived from them (see DECISIONS.md).
+model WeeklyReflection {
+  isoWeekStart String   @id
+  eating       Int
+  sleep        Int
+  schoolStress Int
+  submittedAt  DateTime @default(now())
+}
+
+/// A dismissed week-over-week ramp warning, keyed to the later week of the
+/// compared pair — acknowledging one jump never silences a later one.
+model RampAck {
+  isoWeekStart   String   @id
+  /// Why the jump was expected, e.g. "Injury return". Null = no reason given.
+  reason         String?
+  acknowledgedAt DateTime @default(now())
+}
+
+/// Single-row table (id = "singleton") for season-wide settings.
+model SeasonConfig {
+  id              String   @id @default("singleton")
+  nationalsDate   String
+  seasonStartDate String
+  seasonEndDate   String
+  updatedAt       DateTime @updatedAt
+}

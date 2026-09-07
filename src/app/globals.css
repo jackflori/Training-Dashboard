@@ -1,0 +1,70 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+ * Semantic color tokens, consumed via tailwind.config.ts (bg-surface, text-ink,
+ * ...). Space-separated RGB channels so Tailwind's <alpha-value> modifier works
+ * (bg-accent/10 etc.). Light is the base; dark overrides below.
+ *
+ * The accent is a single blue ramp — soft / mid / base / strong — so tints,
+ * tracks, and fills all read as one hue instead of one flat accent stranded in
+ * a sea of gray. Status colors are reserved for state (never decoration) and
+ * always ship with a label or icon, since warning is sub-3:1 on the light
+ * surface and must never carry meaning by color alone.
+ */
+:root {
+  --page: 249 249 247;
+  --surface: 252 252 251;
+  --surface-muted: 240 239 236;
+  --border: 225 224 217;
+
+  --ink: 11 11 11;
+  --ink-secondary: 82 81 78;
+  --ink-muted: 137 135 129;
+
+  --accent-soft: 205 226 251;
+  --accent-mid: 134 182 239;
+  --accent: 42 120 214;
+  --accent-strong: 28 92 171;
+  --on-accent: 255 255 255;
+
+  /* Secondary hue — reserved for "today", so it never competes with accent. */
+  --today: 235 104 52;
+  --today-soft: 253 231 221;
+
+  --good: 12 163 12;
+  --warn: 250 178 25;
+  --danger: 208 59 59;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --page: 13 13 13;
+    --surface: 26 26 25;
+    --surface-muted: 44 44 42;
+    --border: 56 56 53;
+
+    --ink: 255 255 255;
+    --ink-secondary: 195 194 183;
+    --ink-muted: 137 135 129;
+
+    --accent-soft: 24 79 149;
+    --accent-mid: 37 106 191;
+    --accent: 57 135 229;
+    --accent-strong: 134 182 239;
+    --on-accent: 255 255 255;
+
+    --today: 217 89 38;
+    --today-soft: 74 32 16;
+
+    --good: 12 163 12;
+    --warn: 250 178 25;
+    --danger: 230 103 103;
+  }
+}
+
+body {
+  background-color: rgb(var(--page));
+  color: rgb(var(--ink));
+}
