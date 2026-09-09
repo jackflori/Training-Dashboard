@@ -332,6 +332,33 @@ place to retune the palette.
 the pure-GET ones at build time, which both bakes in stale data and crashed the
 build. Explicit beats relying on Next's heuristic.
 
+## 13b. "Today" resolves in the athlete's timezone, not the server's
+
+**Bug:** in production the calendar highlighted tomorrow from 8pm onward. At
+9:52pm Eastern the app showed Wednesday, because the server clock read
+01:52 Wednesday UTC.
+
+**Cause:** `todayIso()` formatted `new Date()` with date-fns, which uses the
+*system* timezone. Locally that's Eastern, so it looked correct through all of
+development. Vercel runs in UTC, so it was wrong for the last four hours of
+every day — and `currentWeekStart()` had the same flaw, meaning late Sunday
+evening the whole dashboard would jump to next week.
+
+**Fix:** one `zonedNow()` helper resolves the calendar date and hour through
+`Intl.DateTimeFormat` with an explicit `America/New_York`, and `todayIso`,
+`currentWeekStart`, `isToday`, `daysUntil` and the summary unlock all derive
+from it. Verified by running the same instants with the process in UTC,
+Eastern, and Tokyo — identical results in all three.
+
+**Why it's worth recording:** the codebase already had this exact rule, and only
+applied it in one place. The summary unlock was carefully anchored to
+`America/New_York` (#6) while everything else quietly used system time. Getting
+the hard case right and leaving the easy one on a default is a recognisable
+shape of bug — the rule was understood, it just wasn't applied uniformly.
+
+It also only reproduces in an environment that differs from the development
+machine, in a four-hour window. Locally it was invisible.
+
 ## 14. Postgres, chosen by environment rather than by build
 
 **Chose:** `PrismaStore` implements the same `Store` interface as `JsonStore`,

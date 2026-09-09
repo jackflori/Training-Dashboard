@@ -17,6 +17,35 @@ export type IsoDate = string; // "2026-09-07"
 
 const WEEK_OPTS = { weekStartsOn: 1 as const }; // 1 = Monday
 
+/**
+ * The athlete's timezone. Every "what day is it" question resolves here rather
+ * than in the server's local zone — in production that's UTC, which would roll
+ * the calendar over to tomorrow at 8pm Eastern and jump to next week on Sunday
+ * evening.
+ */
+export const APP_TIME_ZONE = "America/New_York";
+
+const ZONED = new Intl.DateTimeFormat("en-CA", {
+  timeZone: APP_TIME_ZONE,
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+  hour: "2-digit",
+  hour12: false,
+});
+
+/** "Now" as seen from the athlete's timezone: its calendar date and its hour. */
+function zonedNow(now: Date): { date: IsoDate; hour: number } {
+  const parts = ZONED.formatToParts(now);
+  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? "";
+  const rawHour = Number(get("hour"));
+  return {
+    date: `${get("year")}-${get("month")}-${get("day")}`,
+    // Intl renders midnight as "24" in hour12:false on some engines.
+    hour: rawHour === 24 ? 0 : rawHour,
+  };
+}
+
 export function toIsoDate(date: Date): IsoDate {
   return format(date, "yyyy-MM-dd");
 }
@@ -27,7 +56,7 @@ export function fromIsoDate(iso: IsoDate): Date {
 }
 
 export function todayIso(now: Date = new Date()): IsoDate {
-  return toIsoDate(now);
+  return zonedNow(now).date;
 }
 
 /** ISO date of the Monday that starts the week containing `iso`. */
@@ -36,7 +65,9 @@ export function mondayOf(iso: IsoDate): IsoDate {
 }
 
 export function currentWeekStart(now: Date = new Date()): IsoDate {
-  return toIsoDate(startOfWeek(now, WEEK_OPTS));
+  // Derived from the zoned calendar date, not the raw instant — week math on a
+  // plain date string is timezone-free once the date itself is right.
+  return mondayOf(todayIso(now));
 }
 
 export function addWeeks(isoWeekStart: IsoDate, n: number): IsoDate {
@@ -90,12 +121,16 @@ export function seasonWeeks(seasonEnd: IsoDate, now: Date = new Date()): IsoDate
 }
 
 export function isToday(iso: IsoDate, now: Date = new Date()): boolean {
-  return iso === toIsoDate(now);
+  return iso === todayIso(now);
 }
 
-/** Whole calendar days from today until `iso` (negative if in the past). */
+/**
+ * Whole calendar days from today until `iso` (negative if in the past).
+ * Both sides are plain calendar dates, so the count never shifts with the
+ * server's clock — the countdown ticks over at midnight Eastern, not UTC.
+ */
 export function daysUntil(iso: IsoDate, now: Date = new Date()): number {
-  return differenceInCalendarDays(fromIsoDate(iso), now);
+  return differenceInCalendarDays(fromIsoDate(iso), fromIsoDate(todayIso(now)));
 }
 
 export function isWithin(iso: IsoDate, startIso: IsoDate, endIso: IsoDate): boolean {
@@ -107,36 +142,15 @@ export function isWithin(iso: IsoDate, startIso: IsoDate, endIso: IsoDate): bool
  * The weekly summary unlocks on Sunday afternoon — you shouldn't be rating a
  * week that still has running left in it.
  *
- * Anchored to America/New_York rather than a fixed UTC offset so it keeps
- * meaning 1pm local across the DST change (Nov 1, 2026), which falls mid-season.
+ * Anchored to APP_TIME_ZONE rather than a fixed UTC offset so it keeps meaning
+ * 1pm local across the DST change (Nov 1, 2026), which falls mid-season.
  * A week that has already ended is always open.
  */
 export const SUMMARY_UNLOCK_HOUR_ET = 13;
 
-const ET_PARTS = new Intl.DateTimeFormat("en-CA", {
-  timeZone: "America/New_York",
-  year: "numeric",
-  month: "2-digit",
-  day: "2-digit",
-  hour: "2-digit",
-  hour12: false,
-});
-
-/** "Now" as seen from Eastern time: its calendar date and its hour. */
-function easternNow(now: Date): { date: IsoDate; hour: number } {
-  const parts = ET_PARTS.formatToParts(now);
-  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? "";
-  const rawHour = Number(get("hour"));
-  return {
-    date: `${get("year")}-${get("month")}-${get("day")}`,
-    // Intl renders midnight as "24" in hour12:false on some engines.
-    hour: rawHour === 24 ? 0 : rawHour,
-  };
-}
-
 export function isSummaryUnlocked(isoWeekStart: IsoDate, now: Date = new Date()): boolean {
   const sunday = weekDays(isoWeekStart)[6]!;
-  const { date: etToday, hour: etHour } = easternNow(now);
+  const { date: etToday, hour: etHour } = zonedNow(now);
 
   // ISO dates compare correctly as strings.
   if (sunday < etToday) return true; // week is over
