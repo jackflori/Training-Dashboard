@@ -23,5 +23,5 @@ This project was built with heavy AI assistance, more so than my
 used for explanations rather than code. Here, most of the implementation was
 AI-generated. My contribution was scoping, design decisions, and code review.
 
-[`DECISIONS.md`](./DECISIONS.md) is the honest record of that process, reversals
-included. The commit history is co-authored, so the split is visible there too.
+[`CLAUDE.md`](./CLAUDE.md) & [`DECISIONS.md`](./DECISIONS.md) are records of that process, reversals
+included.
