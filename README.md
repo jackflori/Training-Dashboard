@@ -18,10 +18,7 @@ Platform-agnostic by design, reading GPX exports from Strava/Garmin Connect with
 
 ## Note on AI Usage
 
-This project was built with heavy AI assistance, more so than my
-[Game Boy emulator](https://github.com/jackflori/GameBoy-Emulator) where AI was
-used for explanations rather than code. Here, most of the implementation was
-AI-generated. My contribution was scoping, design decisions, and code review.
+This project was built with heavy AI assistance. My primary contributions were scoping, design decisions, and code review.
 
 [`CLAUDE.md`](./CLAUDE.md) & [`DECISIONS.md`](./DECISIONS.md) are records of that process, reversals
 included.
